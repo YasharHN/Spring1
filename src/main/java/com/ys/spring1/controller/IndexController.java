@@ -1,19 +1,31 @@
 package com.ys.spring1.controller;
 
+import com.ys.spring1.service.SearchService;
 import org.codehaus.jackson.map.ObjectMapper;
+import org.elasticsearch.action.delete.DeleteResponse;
+import org.elasticsearch.action.get.GetResponse;
+import org.elasticsearch.action.index.IndexResponse;
+import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.client.Client;
+import org.elasticsearch.client.transport.TransportClient;
+import org.elasticsearch.common.settings.ImmutableSettings;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.transport.InetSocketTransportAddress;
+import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.node.Node;
+import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.SearchHits;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.*;
 
 import javax.inject.Inject;
 import java.io.IOException;
-import java.util.Calendar;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.TimeZone;
+import java.util.*;
+
+import static org.elasticsearch.common.xcontent.XContentFactory.*;
+import static org.elasticsearch.node.NodeBuilder.nodeBuilder;
 
 /**
  * Created with IntelliJ IDEA.
@@ -27,6 +39,9 @@ public class IndexController {
 
     @Inject
     ObjectMapper objectMapper;
+
+    @Inject
+    SearchService searchService;
 
     @RequestMapping(value = "/", method = RequestMethod.GET)
     @ResponseBody
@@ -44,4 +59,42 @@ public class IndexController {
         return map;
     }
 
+    @RequestMapping(value = "/index/{id}", method = RequestMethod.GET)
+    @ResponseBody
+    public IndexResponse indexDoc(@PathVariable("id") String id) throws IOException {
+        XContentBuilder builder = jsonBuilder()
+                .startObject()
+                .field("user", "kimchy")
+                .field("postDate", new Date())
+                .field("message", "trying out Elasticsearch" + new Date())
+                .endObject();
+        return searchService.store("twitter", "tweet", id, builder);
+    }
+
+    @RequestMapping(value = "/get/{id}", method = RequestMethod.GET)
+    @ResponseBody
+    public Map<String, Object> getDoc(@PathVariable("id") String id) throws IOException {
+        GetResponse getResponse = searchService.get("twitter", "tweet", id);
+        return getResponse.getSource();
+    }
+
+    @RequestMapping(value = "/delete/{id}", method = RequestMethod.GET)
+    @ResponseBody
+    public DeleteResponse deleteDoc(@PathVariable("id") String id) throws IOException {
+        DeleteResponse deleteResponse = searchService.delete("twitter", "tweet", id);
+        return deleteResponse;
+    }
+
+    @RequestMapping(value = "/search", method = RequestMethod.GET)
+    @ResponseBody
+    public List<Map<String, Object>> searchDoc(@RequestParam("q") String q) throws IOException {
+        SearchResponse searchResponse = searchService.search("twitter", "tweet", q);
+        List<Map<String, Object>> list = new ArrayList<>();
+        if(searchResponse.getHits()!=null){
+            for(SearchHit searchHit: searchResponse.getHits()){
+                list.add(searchHit.getSource());
+            }
+        }
+        return list;
+    }
 }
